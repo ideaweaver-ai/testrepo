@@ -1,0 +1,23 @@
+name: Fail Demo (Hard)
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  fail:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Intentionally fail
+        run: |
+          echo "Simulating a build failure…"
+          exit 1
+
+      - name: Always upload logs
+        if: always()
+        run: |
+          mkdir -p artifacts
+          dmesg | tail -n 200 > artifacts/syslog_tail.txt
+        shell: bash
