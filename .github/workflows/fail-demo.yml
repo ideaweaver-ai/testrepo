@@ -1,23 +1,214 @@
-name: Fail Demo (Hard)
+name: Complex CI/CD Failure Demo
 on:
   push:
   workflow_dispatch:
+  pull_request:
 
 jobs:
-  fail:
+  # Job 1: Python dependency and syntax errors
+  python-tests:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.8, 3.9, 3.10]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Intentionally fail
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
         run: |
-          echo "Simulating a build failure…"
+          pip install -r requirements.txt
+        env:
+          PIP_DISABLE_PIP_VERSION_CHECK: true
+
+      - name: Run tests
+        run: |
+          python -m pytest tests/ -v
+
+      - name: Lint code
+        run: |
+          flake8 src/
+          black --check src/
+
+  # Job 2: Node.js build and test failures
+  node-build:
+    runs-on: ubuntu-latest
+    needs: python-tests
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build project
+        run: npm run build
+
+      - name: Run tests
+        run: npm test
+
+      - name: Run linting
+        run: npm run lint
+
+  # Job 3: Docker build failures
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: node-build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build Docker image
+        run: |
+          docker build -t myapp:latest .
+          docker run --rm myapp:latest echo "Container test"
+
+      - name: Test Docker image
+        run: |
+          docker run --rm myapp:latest python -c "print('Hello from container')"
+
+  # Job 4: Database and service failures
+  integration-tests:
+    runs-on: ubuntu-latest
+    needs: docker-build
+    services:
+      postgres:
+        image: postgres:13
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install pytest psycopg2-binary
+
+      - name: Run integration tests
+        run: |
+          python -m pytest tests/integration/ -v
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/testdb
+
+  # Job 5: Security scanning
+  security-scan:
+    runs-on: ubuntu-latest
+    needs: integration-tests
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run security scan
+        run: |
+          # Simulate security scan failure
+          echo "Running security scan..."
+          echo "Found 3 high severity vulnerabilities"
+          echo "Found 1 critical vulnerability"
           exit 1
 
-      - name: Always upload logs
-        if: always()
+  # Job 6: Performance tests
+  performance-tests:
+    runs-on: ubuntu-latest
+    needs: security-scan
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install performance testing tools
+        run: |
+          pip install locust
+
+      - name: Run performance tests
+        run: |
+          # Simulate performance test failure
+          echo "Running performance tests..."
+          echo "Response time exceeded threshold: 2.5s > 1.0s"
+          echo "Throughput below requirement: 50 req/s < 100 req/s"
+          exit 1
+
+  # Job 7: Deployment simulation
+  deploy:
+    runs-on: ubuntu-latest
+    needs: performance-tests
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to production
+        run: |
+          echo "Deploying to production..."
+          echo "Error: Insufficient permissions to deploy"
+          echo "Required: admin access to production environment"
+          exit 1
+
+  # Job 8: Always run - collect artifacts and logs
+  collect-logs:
+    runs-on: ubuntu-latest
+    needs: [python-tests, node-build, docker-build, integration-tests, security-scan, performance-tests, deploy]
+    if: always()
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Collect system logs
         run: |
           mkdir -p artifacts
           dmesg | tail -n 200 > artifacts/syslog_tail.txt
-        shell: bash
+          journalctl --no-pager -n 100 > artifacts/system_journal.txt
+          ps aux > artifacts/process_list.txt
+          df -h > artifacts/disk_usage.txt
+          free -h > artifacts/memory_usage.txt
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: failure-logs
+          path: artifacts/
+          retention-days: 7
+
+      - name: Generate failure report
+        run: |
+          echo "=== CI/CD Failure Report ===" > artifacts/failure_report.txt
+          echo "Timestamp: $(date)" >> artifacts/failure_report.txt
+          echo "Repository: ${{ github.repository }}" >> artifacts/failure_report.txt
+          echo "Branch: ${{ github.ref_name }}" >> artifacts/failure_report.txt
+          echo "Commit: ${{ github.sha }}" >> artifacts/failure_report.txt
+          echo "" >> artifacts/failure_report.txt
+          echo "Failed Jobs:" >> artifacts/failure_report.txt
+          echo "- python-tests: Dependency and syntax issues" >> artifacts/failure_report.txt
+          echo "- node-build: Build and test failures" >> artifacts/failure_report.txt
+          echo "- docker-build: Container build issues" >> artifacts/failure_report.txt
+          echo "- integration-tests: Database connection problems" >> artifacts/failure_report.txt
+          echo "- security-scan: Security vulnerabilities found" >> artifacts/failure_report.txt
+          echo "- performance-tests: Performance thresholds exceeded" >> artifacts/failure_report.txt
+          echo "- deploy: Permission and deployment issues" >> artifacts/failure_report.txt
