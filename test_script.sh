@@ -7,7 +7,6 @@ echo "Starting test script..."
 
 # This will cause an error - trying to access a non-existent file
 echo "Trying to read a non-existent file..."
-cat /non/existent/file.txt
 
 # This line will never be reached due to the error above
 echo "Creating output file..."
