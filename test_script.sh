@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Exit immediately if any command fails
+set -e
+
 echo "Starting test script..."
 
 # This will cause an error - trying to access a non-existent file
