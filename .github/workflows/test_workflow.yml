@@ -1,0 +1,30 @@
+name: Simple Test Workflow
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-script:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Run test script
+      run: |
+        chmod +x ./test_script.sh
+        ./test_script.sh
+      
+    - name: Check if file exists
+      run: |
+        if [ -f "output.txt" ]; then
+          echo "✅ Script completed successfully"
+          cat output.txt
+        else
+          echo "❌ Script failed - output.txt not found"
+          exit 1
+        fi
