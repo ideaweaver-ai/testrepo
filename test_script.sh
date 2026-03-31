@@ -1,5 +1,5 @@
-#!/bin/bash
-
+#!/bin/bash -x
+# Test comment
 # Exit immediately if any command fails
 set -e
 
